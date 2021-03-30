@@ -75,20 +75,24 @@ public static class Instantiation {
     [UpdateInGroup(typeof(FixedStepSimulationSystemGroup))]
     [UpdateBefore(typeof(expire_entities))]
     [UsedImplicitly] public class destroy_and_instantiate : SystemBase {
-        EntityQuery instances_query;
+        EntityQuery subjects_query;
         EntityQuery spawns_query;
 
         protected override void OnUpdate() {
             // remaining frames of the current iteration
-            var remaining_frames = GetSingleton<has_current_iteration>().remaining_frames;
+            var remaining_frames = GetSingleton<has_current_iteration>()
+                .remaining_frames;
             
             // randomly determine entities to destroy. Gather them in the destroyed_entities list.
-            using var destroyed_entities = new NativeList<Entity>(instances_query.CalculateEntityCount(), TempJob);
-            var j1 = Entities.WithName("EnqueueDeletes").WithAll<is_a_test_subject>().ForEach((int entityInQueryIndex, Entity e) => {
+            var subjects_count = subjects_query.CalculateEntityCount();
+            using var destroyed_entities = new NativeList<Entity>(subjects_count, TempJob);
+            var j1 = Entities.WithName("EnqueueDeletes")
+            .WithAll<is_a_test_subject>()
+            .ForEach((int entityInQueryIndex, Entity e) => {
                 if (hash(uint2((uint) entityInQueryIndex, remaining_frames)) < (uint.MaxValue / 4 * 3)) 
                     destroyed_entities.AddNoResize(e);
             })
-            .WithStoreEntityQueryInField(ref instances_query)
+            .WithStoreEntityQueryInField(ref subjects_query)
             .Schedule(Dependency);
 
             // gather entities to spawn, generate positions for them
@@ -96,7 +100,8 @@ public static class Instantiation {
             using var spawn_prefabs = new NativeList<Entity>(count, TempJob);
             using var spawn_counts = new NativeList<int>(count, TempJob);
             using var positions = new NativeList<float2>(count * 100, TempJob);
-            var j2 = Entities.WithName("GeneratePositions").ForEach((int entityInQueryIndex, in spawns spawns, in Translation translation) => {
+            var j2 = Entities.WithName("GeneratePositions")
+            .ForEach((int entityInQueryIndex, in spawns spawns, in Translation translation) => {
                 var current_prefab_i = spawn_prefabs.Length - 1;
                 var instance_count = (int)spawns.count_per_fame;
                 var prefab = spawns.prefab;
@@ -106,8 +111,9 @@ public static class Instantiation {
                     spawn_prefabs.Add(prefab);
                     spawn_counts.Add(instance_count);
                 }
-                
-                var random = Random.CreateFromIndex(hash(uint2((uint)entityInQueryIndex, remaining_frames)));
+
+                var spawn_hash = hash(uint2((uint)entityInQueryIndex, remaining_frames));
+                var random = Random.CreateFromIndex(spawn_hash);
                 for (var i = 0; i < instance_count; i++) {
                     var position = translation.Value.xz + random.NextFloat2(new float2(-100, -100), new float2(100, 100));
                     positions.Add(position);
@@ -121,7 +127,7 @@ public static class Instantiation {
                 JobHandle.CombineDependencies(j1, j2).Complete();
             
             // destroy entities
-            using(Profile($"Destroy {destroyed_entities.Length} subject entities"))
+            using (Profile($"Destroy {destroyed_entities.Length} subject entities"))
                 EntityManager.DestroyEntity(destroyed_entities);
 
             // instantiate entities
@@ -131,7 +137,8 @@ public static class Instantiation {
                 var data_index = 0;
                 for (var spawn_i = 0; spawn_i < spawn_prefabs.Length; spawn_i++) {
                     var spawn_count = spawn_counts[spawn_i];
-                    EntityManager.Instantiate(spawn_prefabs[spawn_i], instances.GetSubArray(data_index, spawn_count));
+                    var sub_array = instances.GetSubArray(data_index, spawn_count);
+                    EntityManager.Instantiate(spawn_prefabs[spawn_i], sub_array);
                     data_index += spawn_count;
                 }
             }
@@ -150,7 +157,8 @@ public static class Instantiation {
             public NativeArray<Entity> instances;
             public NativeArray<float2> positions;
             [NativeDisableContainerSafetyRestriction] [WriteOnly] public ComponentDataFromEntity<Translation> translation_w;
-            public void Execute(int i) => translation_w[instances[i]] = new Translation { Value = positions[i].x0y() };
+            public void Execute(int i) => 
+                translation_w[instances[i]] = new Translation { Value = positions[i].x0y() };
         }
     }
 
