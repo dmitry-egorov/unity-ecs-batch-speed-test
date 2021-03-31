@@ -80,8 +80,7 @@ public static class Instantiation {
 
         protected override void OnUpdate() {
             // remaining frames of the current iteration
-            var remaining_frames = GetSingleton<has_current_iteration>()
-                .remaining_frames;
+            var remaining_frames = GetSingleton<has_current_iteration>().remaining_frames;
             
             // randomly determine entities to destroy. Gather them in the destroyed_entities list.
             var subjects_count = subjects_query.CalculateEntityCount();
@@ -132,7 +131,7 @@ public static class Instantiation {
 
             // instantiate entities
             var instances_count = positions.Length;
-            using var instances = new NativeArray<Entity>(instances_count, Temp);
+            using var instances = new NativeArray<Entity>(instances_count, TempJob);
             using (Profile($"Instantiate {instances_count} entities")) {
                 var data_index = 0;
                 for (var spawn_i = 0; spawn_i < spawn_prefabs.Length; spawn_i++) {
@@ -150,12 +149,13 @@ public static class Instantiation {
                     positions = positions, 
                     translation_w = GetComponentDataFromEntity<Translation>()
                 }.ScheduleParallel(instances_count, 7, Dependency);
+                Dependency.Complete();
             }
         }
 
         [BurstCompile] struct set_positions_job: IJobFor {
-            public NativeArray<Entity> instances;
-            public NativeArray<float2> positions;
+            [ReadOnly] public NativeArray<Entity> instances;
+            [ReadOnly] public NativeArray<float2> positions;
             [NativeDisableContainerSafetyRestriction] [WriteOnly] public ComponentDataFromEntity<Translation> translation_w;
             public void Execute(int i) => 
                 translation_w[instances[i]] = new Translation { Value = positions[i].x0y() };
