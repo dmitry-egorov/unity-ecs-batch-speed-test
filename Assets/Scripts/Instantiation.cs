@@ -14,7 +14,6 @@ using static Unity.Mathematics.math;
 using static UnityEngine.Debug;
 using Random = Unity.Mathematics.Random;
 
-
 public static class Instantiation {
     const uint frames_per_iteration = 60 * 2;
 
@@ -122,7 +121,7 @@ public static class Instantiation {
             .Schedule(Dependency);
             
             // wait for the scheduled jobs to complete
-            using (Profile("Wait for jobs"))
+            using (Profile("Wait for the jobs"))
                 JobHandle.CombineDependencies(j1, j2).Complete();
             
             // destroy entities
@@ -149,8 +148,9 @@ public static class Instantiation {
                     positions = positions, 
                     translation_w = GetComponentDataFromEntity<Translation>()
                 }.ScheduleParallel(instances_count, 7, Dependency);
-                Dependency.Complete();
             }
+            
+            Dependency.Complete();
         }
 
         [BurstCompile] struct set_positions_job: IJobFor {
